@@ -44,6 +44,17 @@ void loadProfile(){
 		fprintf(stderr, "Error in profile file, No PATH_VAR or HOME_VAR variables could be found\nEnsure there is no whitespace before first variable declaration\n");
 		exit(1);
 	}
+	//strip /n off end of HOME and PATH just for formatting purposes when printing later on
+	int pathLength = 0;
+	int homeLength = 0;
+	pathLength = strlen(PATH_VAR);
+	homeLength = strlen(HOME_VAR);
+	if(PATH_VAR[pathLength-1]=='\n'){
+		PATH_VAR[pathLength-1] = '\0';
+	}
+	if(HOME_VAR[homeLength-1]=='\n'){
+		HOME_VAR[homeLength-1] = '\0';
+	}
 }
 
 /* helper function to return current working directory as string */
@@ -65,7 +76,10 @@ void parsePath(){
 		DIRS[i] = NULL;
 	}
 	char * tok;
-	tok = strtok(PATH_VAR, "PATH_VAR=");
+	char pathVar[512];
+	strcpy(pathVar, PATH_VAR);
+	tok = strtok(pathVar, "$");
+	tok = strtok(tok, "PATH_VAR=");
 	tok = strtok(tok, ":");
 	int count = 0;
 	while(tok!=NULL){
@@ -82,16 +96,63 @@ void parseHome(){
 	if(HOME_DIR!=NULL){
 		free(HOME_DIR);
 	}
-	HOME_DIR = malloc((strlen(HOME_VAR)-5)*sizeof(char));
-	int c = 5;
-	for(c=5; c<strlen(HOME_VAR); c++){
-		HOME_DIR[c-5]=HOME_VAR[c];
+	int useDollar = 0;
+	if(HOME_VAR[0]=='$'){
+		useDollar = 1;
+	}
+	HOME_DIR = malloc((strlen(HOME_VAR)-(5+useDollar))*sizeof(char));
+	int c;
+	for(c=(5+useDollar); c<strlen(HOME_VAR); c++){
+		HOME_DIR[c-(5+useDollar)]=HOME_VAR[c];
 	}
 	
 }
 
 /* run the correct program for the tokens given */
 void runProgram(char * programName , char **  args){
+	//handle ourselves if cd or $HOME/$PATH var change
+	if(strcmp("cd", programName) == 0){
+		int error;
+		if(args[1]==NULL){
+			error = chdir(HOME_DIR);
+			if(error<0){
+				fprintf(stderr, "HOME directory %s could not be found, check your $HOME variable\n", HOME_DIR);
+			}
+		}
+		else{
+			error = chdir(args[1]);
+			if(error<0){
+				fprintf(stderr, "The directory %s does not exist or failed to open\n", args[1]);
+			}
+		}
+		return;
+	}
+	else if(programName[0]=='$'){
+		if(programName[1]=='P'){
+			if(programName[5]!='='){
+				printf("Current Assignment: %s\n", PATH_VAR);
+			}
+			else{
+				strcpy(PATH_VAR, programName);
+				parsePath();
+				printf("PATH changed: %s\n", PATH_VAR);
+			}
+			return;
+		}
+		else if(programName[1]=='H'){
+			if(programName[5]!='='){
+				printf("Current Assignment: %s\n", HOME_VAR);
+			}
+			else{
+				strcpy(HOME_VAR, programName);
+				parseHome();
+				printf("HOME changed: %s\n", HOME_DIR);
+			}
+			return;
+		}
+
+	}
+
 	char * directoryName = DIRS[0];
 	int counter = 0;
 	while(directoryName!=NULL){
